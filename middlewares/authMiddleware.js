@@ -59,12 +59,15 @@ const generateToken = (id) => {
 
 // Set token cookie
 const setTokenCookie = (res, token) => {
+    const isProduction = process.env.NODE_ENV === 'production';
+
     const options = {
         expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
         httpOnly: true,
-        // Critical for cross-origin (Localhost -> Vercel)
-        secure: true,
-        sameSite: 'none'
+        // In production (Vercel): secure + sameSite none for cross-origin
+        // In development (localhost): not secure + sameSite lax
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax'
     };
     res.cookie('token', token, options);
 };

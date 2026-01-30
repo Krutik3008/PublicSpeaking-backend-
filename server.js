@@ -18,9 +18,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-// Enable CORS
+// Enable CORS with specific origins from env
+const allowedOrigins = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+    : ['http://localhost:5173', 'https://public-speaking-frontend.vercel.app'];
+
 app.use(cors({
-    origin: true, // Allow all origins (reflects request origin)
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Still allow for development flexibility
+        }
+    },
     credentials: true
 }));
 

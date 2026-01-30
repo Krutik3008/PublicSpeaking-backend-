@@ -121,6 +121,7 @@ const scripts = [
         _id: '1',
         scenario: '1',
         title: 'Calm Approach',
+        text: 'Excuse me, I noticed there might be an error on my bill. I wanted to bring this to your attention because I believe there may be a discrepancy. Could you help me understand this charge? I appreciate your understanding. Thank you for your help.',
         openingLine: 'Excuse me, I noticed there might be an error on my bill.',
         bodyScript: 'I wanted to bring this to your attention because I believe there may be a discrepancy. Could you help me understand this charge?',
         closingLine: 'I appreciate your understanding. Thank you for your help.',

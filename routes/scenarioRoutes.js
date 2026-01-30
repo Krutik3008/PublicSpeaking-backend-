@@ -5,10 +5,12 @@ const {
     getScenarioById,
     getScenariosByCategory,
     searchScenarios,
-    getCategories
+    getCategories,
+    createScenario
 } = require('../controllers/scenarioController');
 
 // Public routes
+router.post('/', createScenario);
 router.get('/', getAllScenarios);
 router.get('/categories', getCategories);
 router.get('/search', searchScenarios);

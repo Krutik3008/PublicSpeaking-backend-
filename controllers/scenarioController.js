@@ -5,6 +5,48 @@ const mongoose = require('mongoose');
 // Helper to check if database is connected
 const isDbConnected = () => mongoose.connection.readyState === 1;
 
+// @desc    Create a new scenario
+// @route   POST /api/scenarios
+// @access  Public
+const createScenario = async (req, res) => {
+    try {
+        if (!isDbConnected()) {
+            return res.status(503).json({
+                success: false,
+                message: 'Database not connected'
+            });
+        }
+
+        const { title, description, category, difficulty, emotionalContext } = req.body;
+
+        // Validation
+        if (!title || !description || !category || !difficulty || !emotionalContext) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide all required fields'
+            });
+        }
+
+        const scenario = await Scenario.create({
+            title,
+            description,
+            category,
+            difficulty,
+            emotionalContext
+        });
+
+        res.status(201).json({
+            success: true,
+            data: scenario
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 // @desc    Get all scenarios
 // @route   GET /api/scenarios
 // @access  Public
@@ -15,18 +57,18 @@ const getAllScenarios = async (req, res) => {
         if (!isDbConnected()) {
             // Use fallback data
             let filteredScenarios = fallbackScenarios;
-            
+
             if (category) {
                 filteredScenarios = filteredScenarios.filter(s => s.category === category);
             }
             if (difficulty) {
                 filteredScenarios = filteredScenarios.filter(s => s.difficulty === difficulty);
             }
-            
+
             const startIndex = (parseInt(page) - 1) * parseInt(limit);
             const endIndex = startIndex + parseInt(limit);
             const paginatedScenarios = filteredScenarios.slice(startIndex, endIndex);
-            
+
             return res.json({
                 success: true,
                 count: paginatedScenarios.length,
@@ -156,7 +198,7 @@ const searchScenarios = async (req, res) => {
         }
 
         if (!isDbConnected()) {
-            const scenarios = fallbackScenarios.filter(s => 
+            const scenarios = fallbackScenarios.filter(s =>
                 s.title.toLowerCase().includes(q.toLowerCase()) ||
                 s.description.toLowerCase().includes(q.toLowerCase())
             );
@@ -218,5 +260,6 @@ module.exports = {
     getScenarioById,
     getScenariosByCategory,
     searchScenarios,
-    getCategories
+    getCategories,
+    createScenario
 };

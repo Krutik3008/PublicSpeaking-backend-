@@ -25,7 +25,7 @@ const protect = async (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
+
         if (isDbConnected()) {
             req.user = await User.findById(decoded.id).select('-password');
             if (!req.user) {
@@ -40,7 +40,7 @@ const protect = async (req, res, next) => {
                 message: 'Database not available'
             });
         }
-        
+
         next();
     } catch (error) {
         res.status(401).json({
@@ -62,8 +62,9 @@ const setTokenCookie = (res, token) => {
     const options = {
         expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax'
+        // Critical for cross-origin (Localhost -> Vercel)
+        secure: true,
+        sameSite: 'none'
     };
     res.cookie('token', token, options);
 };

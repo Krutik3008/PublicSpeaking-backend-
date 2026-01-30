@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middlewares/errorMiddleware');
@@ -15,6 +16,7 @@ const app = express();
 // Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
 
 // Enable CORS
 app.use(cors({
@@ -31,6 +33,7 @@ app.use('/api/scripts', require('./routes/scriptRoutes'));
 app.use('/api/tips', require('./routes/tipRoutes'));
 app.use('/api/stories', require('./routes/storyRoutes'));
 app.use('/api/tools', require('./routes/toolsRoutes'));
+app.use('/api/stats', require('./routes/statsRoutes'));
 
 // Welcome route
 app.get('/', (req, res) => {

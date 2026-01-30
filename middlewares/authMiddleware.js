@@ -1,68 +1,71 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const mongoose = require('mongoose');
+
+// Helper to check if database is connected
+const isDbConnected = () => mongoose.connection.readyState === 1;
 
 // Protect routes - required authentication
 const protect = async (req, res, next) => {
     let token;
 
-    if (
-        req.headers.authorization &&
-        req.headers.authorization.startsWith('Bearer')
-    ) {
-        try {
-            // Get token from header
-            token = req.headers.authorization.split(' ')[1];
-
-            // Verify token
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-            // Get user from the token
-            req.user = await User.findById(decoded.id).select('-password');
-
-            next();
-        } catch (error) {
-            console.error(error);
-            res.status(401).json({
-                success: false,
-                message: 'Not authorized, token failed'
-            });
-        }
+    // Check for token in cookies first, then Authorization header
+    if (req.cookies && req.cookies.token) {
+        token = req.cookies.token;
+    } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
     }
 
     if (!token) {
-        res.status(401).json({
+        return res.status(401).json({
             success: false,
-            message: 'Not authorized, no token'
+            message: 'Please login to access this resource'
         });
     }
-};
 
-// Optional auth - attach user if token exists, but don't require it
-const optionalAuth = async (req, res, next) => {
-    let token;
-
-    if (
-        req.headers.authorization &&
-        req.headers.authorization.startsWith('Bearer')
-    ) {
-        try {
-            token = req.headers.authorization.split(' ')[1];
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        if (isDbConnected()) {
             req.user = await User.findById(decoded.id).select('-password');
-        } catch (error) {
-            // Token invalid, but that's okay for optional auth
-            req.user = null;
+            if (!req.user) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'User not found'
+                });
+            }
+        } else {
+            return res.status(503).json({
+                success: false,
+                message: 'Database not available'
+            });
         }
+        
+        next();
+    } catch (error) {
+        res.status(401).json({
+            success: false,
+            message: 'Invalid token'
+        });
     }
-
-    next();
 };
 
 // Generate JWT Token
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRE || '30d'
+        expiresIn: process.env.JWT_EXPIRE || '7d'
     });
 };
 
-module.exports = { protect, optionalAuth, generateToken };
+// Set token cookie
+const setTokenCookie = (res, token) => {
+    const options = {
+        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+    };
+    res.cookie('token', token, options);
+};
+
+module.exports = { protect, generateToken, setTokenCookie };

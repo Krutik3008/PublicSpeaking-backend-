@@ -1,11 +1,49 @@
 const Tip = require('../models/Tip');
+const { tips: fallbackTips } = require('../utils/fallbackData');
+const mongoose = require('mongoose');
 
-// @desc    Get all tips
+// Helper to check if database is connected
+const isDbConnected = () => mongoose.connection.readyState === 1;
+
+// @desc    Get all tips with user like status
 // @route   GET /api/tips
 // @access  Public
 const getAllTips = async (req, res) => {
     try {
         const { category, sort = 'likes', limit = 50 } = req.query;
+        const userId = req.user?._id;
+
+        if (!isDbConnected()) {
+            let filteredTips = fallbackTips.filter(tip => tip.isApproved);
+            
+            if (category) {
+                filteredTips = filteredTips.filter(tip => tip.category === category);
+            }
+            
+            // Add hasLiked status for fallback
+            if (userId) {
+                const userLikes = fallbackTipLikes.get(userId) || new Set();
+                filteredTips = filteredTips.map(tip => ({
+                    ...tip,
+                    hasLiked: userLikes.has(tip._id)
+                }));
+            }
+            
+            // Sort tips
+            if (sort === 'likes') {
+                filteredTips.sort((a, b) => b.likes - a.likes);
+            } else if (sort === 'newest') {
+                filteredTips.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            }
+            
+            const limitedTips = filteredTips.slice(0, parseInt(limit));
+            
+            return res.json({
+                success: true,
+                count: limitedTips.length,
+                data: limitedTips
+            });
+        }
 
         let query = { isApproved: true };
 
@@ -24,10 +62,16 @@ const getAllTips = async (req, res) => {
             .sort(sortOption)
             .limit(parseInt(limit));
 
+        // Add hasLiked status for each tip
+        const tipsWithLikeStatus = tips.map(tip => ({
+            ...tip.toObject(),
+            hasLiked: userId ? tip.likedBy.includes(userId) : false
+        }));
+
         res.json({
             success: true,
-            count: tips.length,
-            data: tips
+            count: tipsWithLikeStatus.length,
+            data: tipsWithLikeStatus
         });
     } catch (error) {
         res.status(500).json({
@@ -87,13 +131,62 @@ const addTip = async (req, res) => {
     }
 };
 
-// @desc    Like a tip
+// In-memory like tracking for fallback
+let fallbackTipLikes = new Map();
+
+// Clear all likes on server restart
+fallbackTipLikes.clear();
+
+// Reset fallback data likes to 0
+const fallbackData = require('../utils/fallbackData');
+fallbackData.tips.forEach(tip => {
+    tip.likes = 0;
+    tip.likedBy = [];
+});
+
+// @desc    Like/Unlike a tip
 // @route   POST /api/tips/:id/like
-// @access  Public
+// @access  Private
 const likeTip = async (req, res) => {
     try {
-        const tip = await Tip.findById(req.params.id);
+        const userId = req.user._id;
+        const tipId = req.params.id;
 
+        if (!isDbConnected()) {
+            // Fallback like system
+            const userLikes = fallbackTipLikes.get(userId) || new Set();
+            const tip = fallbackTips.find(t => t._id === tipId);
+            
+            if (!tip) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Tip not found'
+                });
+            }
+
+            const hasLiked = userLikes.has(tipId);
+            
+            if (hasLiked) {
+                userLikes.delete(tipId);
+                tip.likes = Math.max(0, tip.likes - 1);
+            } else {
+                userLikes.add(tipId);
+                tip.likes += 1;
+            }
+            
+            fallbackTipLikes.set(userId, userLikes);
+            
+            return res.json({
+                success: true,
+                data: { 
+                    likes: tip.likes, 
+                    hasLiked: !hasLiked,
+                    action: hasLiked ? 'unliked' : 'liked'
+                }
+            });
+        }
+
+        const tip = await Tip.findById(tipId);
         if (!tip) {
             return res.status(404).json({
                 success: false,
@@ -101,12 +194,28 @@ const likeTip = async (req, res) => {
             });
         }
 
-        tip.likes += 1;
+        // Check if user already liked this tip
+        const hasLiked = tip.likedBy.includes(userId);
+        
+        if (hasLiked) {
+            // Unlike: remove user from likedBy array and decrease likes
+            tip.likedBy = tip.likedBy.filter(id => id.toString() !== userId.toString());
+            tip.likes = Math.max(0, tip.likes - 1);
+        } else {
+            // Like: add user to likedBy array and increase likes
+            tip.likedBy.push(userId);
+            tip.likes += 1;
+        }
+
         await tip.save();
 
         res.json({
             success: true,
-            data: { likes: tip.likes }
+            data: { 
+                likes: tip.likes, 
+                hasLiked: !hasLiked,
+                action: hasLiked ? 'unliked' : 'liked'
+            }
         });
     } catch (error) {
         res.status(500).json({
